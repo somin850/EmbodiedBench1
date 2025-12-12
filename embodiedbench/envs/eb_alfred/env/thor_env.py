@@ -1,5 +1,6 @@
 import cv2
 import copy
+import time
 import embodiedbench.envs.eb_alfred.gen.constants as constants
 import numpy as np
 from collections import Counter, OrderedDict
@@ -62,7 +63,25 @@ class ThorEnv(Controller):
             scene_name = scene_name_or_num
         else:
             scene_name = 'FloorPlan%d' % scene_name_or_num
-        super().reset(scene_name)
+        # 첫 번째 reset 호출 및 결과 확인
+        first_event = super().reset(scene_name)
+        # 시뮬레이터가 준비되었는지 확인
+        max_wait_time = 10  # 최대 대기 시간 (초)
+        wait_interval = 0.5  # 확인 간격 (초)
+        waited_time = 0
+        while waited_time < max_wait_time:
+            if (first_event is not None and 
+                hasattr(first_event, 'metadata') and 
+                first_event.metadata.get('lastActionSuccess', False)):
+                break
+            time.sleep(wait_interval)
+            waited_time += wait_interval
+            # last_event도 확인
+            if (hasattr(self, 'last_event') and 
+                self.last_event is not None and 
+                hasattr(self.last_event, 'metadata') and 
+                self.last_event.metadata.get('lastActionSuccess', False)):
+                break
         event = super().step(dict(
             action='Initialize',
             gridSize=grid_size,

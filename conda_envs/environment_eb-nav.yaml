@@ -120,7 +120,7 @@ dependencies:
       - omegaconf==2.3.0
       - openai==1.58.1
       - opencv-python==4.10.0.84
-      - outlines==0.0.46
+      - outlines==0.0.34 # 수정정
       - packaging==24.2
       - pandas==2.2.3
       - peft==0.11.1
@@ -131,7 +131,7 @@ dependencies:
       - proto-plus==1.25.0
       - protobuf==5.29.3
       - psutil==6.1.1
-      - pyairports==2.1.1
+      - airportsdata==20241001 #수정
       - pyarrow==19.0.0
       - pyasn1==0.6.1
       - pyasn1-modules==0.4.1

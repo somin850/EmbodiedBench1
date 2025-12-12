@@ -1101,7 +1101,7 @@ class Controller(object):
                             )
                         cuda_vulkan_mapping[cuda_gpu_index] = device_uuid_to_vulkan_gpu_index[device_uuid]
 
-                    with open(cuda_vulkan_mapping_path, "w") as f:
+                    with open(cuda_vulkan_mapping_path, "w+") as f:
                         json.dump(cuda_vulkan_mapping, f)
                 else:
                     with open(cuda_vulkan_mapping_path, "r") as f:
