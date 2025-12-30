@@ -728,10 +728,11 @@ class Controller(object):
                 "On reset and upon initialization, agentMode='bot' has been renamed to agentMode='locobot'."
             )
 
+        # Use Pass instead of Initialize to avoid blocking in headless mode
+        # Initialize is already called during __init__, so we just need to advance the frame
         self.last_event = self.step(
-            action="Initialize",
+            action="Pass",
             ##raise_for_failure=True,
-            **self.initialization_parameters,
         )
 
         if is_procedural:

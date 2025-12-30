@@ -6,8 +6,9 @@ import anthropic
 import google.generativeai as genai
 from openai import OpenAI
 import typing_extensions as typing
-import lmdeploy
-from lmdeploy import pipeline, GenerationConfig, PytorchEngineConfig
+# Lazy load lmdeploy only when model_type='local' to avoid Python 3.9 compatibility issues
+# import lmdeploy
+# from lmdeploy import pipeline, GenerationConfig, PytorchEngineConfig
 from embodiedbench.planner.planner_config.generation_guide import llm_generation_guide, vlm_generation_guide
 from embodiedbench.planner.planner_config.generation_guide_manip import llm_generation_guide_manip, vlm_generation_guide_manip
 from embodiedbench.planner.planner_utils import convert_format_2claude, convert_format_2gemini, ActionPlan_1, ActionPlan, ActionPlan_lang, \
@@ -32,6 +33,8 @@ class RemoteModel:
         self.task_type = task_type
 
         if self.model_type == 'local':
+            # Lazy import lmdeploy components only when needed
+            from lmdeploy import pipeline, GenerationConfig, PytorchEngineConfig
             backend_config = PytorchEngineConfig(session_len=12000, dtype='float16', tp=tp)
             self.model = pipeline(self.model_name, backend_config=backend_config)
         else:
@@ -107,6 +110,9 @@ class RemoteModel:
                 raise ValueError(f"Unsupported model name: {self.model_name}")
 
     def _call_local(self, message_history: list):
+        # Lazy import lmdeploy components
+        from lmdeploy import GenerationConfig
+        
         if self.task_type == 'manip':
             response_format = {
                 "type": "json_schema",

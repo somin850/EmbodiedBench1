@@ -31,7 +31,7 @@ module_names = {
     "eb-alf": "eb_alfred_evaluator",
     "eb-hab": "eb_habitat_evaluator",
     "eb-nav": "eb_navigation_evaluator",
-    "eb-man": "eb_manipulation_evaluator"
+    "eb-man": "eb_manipulation_evaluator_re"  # _re 버전 사용
 }
 
 def get_evaluator(env_name: str):
@@ -57,7 +57,16 @@ def main(cfg: DictConfig) -> None:
     env_name = cfg.env
     logger.info(f"Evaluating environment: {env_name}")
     
-    with open(f"embodiedbench/configs/{env_name}.yaml", 'r') as f:
+    # eb-man일 때는 eb-man_re.yaml 사용
+    config_file = f"{env_name}_re.yaml" if env_name == "eb-man" else f"{env_name}.yaml"
+    # 현재 디렉토리에 따라 경로 조정
+    import os
+    current_dir = os.getcwd()
+    if current_dir.endswith('embodiedbench'):
+        config_path = f"configs/{config_file}"
+    else:
+        config_path = f"embodiedbench/configs/{config_file}"
+    with open(config_path, 'r') as f:
         base_config = yaml.safe_load(f)
 
     override_config = {

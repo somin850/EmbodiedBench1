@@ -49,24 +49,55 @@ if ps -p $XVFB_PID > /dev/null; then
     
     echo "=== EB-Manipulation 빠른 테스트 시작 ==="
     echo "Model: $MODEL_NAME"
-    echo "Down sample ratio: 0.1 (10% 데이터, README 권장 디버깅 값)"
+    if [ -n "$2" ]; then
+        echo "Tasks per variation: $2"
+    else
+        echo "Down sample ratio: 0.1 (10% 데이터, README 권장 디버깅 값)"
+    fi
+    echo "Memory mode: ${3:-baseline}"
+    if [ -n "$4" ]; then
+        echo "Previous results dir: $4"
+    fi
     echo "Eval sets: base (빠른 테스트용)"
+    echo ""
+    echo "Usage: $0 [model_name] [tasks_per_variation] [memory_mode] [previous_results_dir]"
+    echo "  Example: $0 gpt-4o-mini 10 baseline"
+    echo "  Example: $0 gpt-4o-mini 10 failure_only running/eb_manipulation/gpt-4o-mini/baseline_re/base/results"
     echo ""
     
     # 평가 실행
-    python -m embodiedbench.main \
+    # tasks_per_variation과 memory_mode는 선택적 인자로 받음
+    TASKS_PER_VARIATION=${2:-""}
+    MEMORY_MODE=${3:-"baseline"}
+    PREVIOUS_RESULTS_DIR=${4:-""}
+    
+    CMD="python -m embodiedbench.main \
         env=eb-man \
-        model_name="$MODEL_NAME" \
+        model_name=\"$MODEL_NAME\" \
         model_type=remote \
         exp_name=quick_test \
-        down_sample_ratio=0.1 \
         eval_sets=[base] \
         resolution=500 \
         n_shots=4 \
         detection_box=1 \
         multiview=0 \
         multistep=0 \
-        language_only=0
+        language_only=0 \
+        memory_mode=$MEMORY_MODE"
+    
+    # tasks_per_variation이 지정되면 사용, 아니면 down_sample_ratio 사용
+    if [ -n "$TASKS_PER_VARIATION" ]; then
+        CMD="$CMD tasks_per_variation=$TASKS_PER_VARIATION"
+    else
+        CMD="$CMD down_sample_ratio=0.1"
+    fi
+    
+    # previous_results_dir가 지정되면 추가
+    if [ -n "$PREVIOUS_RESULTS_DIR" ]; then
+        CMD="$CMD previous_results_dir=$PREVIOUS_RESULTS_DIR"
+    fi
+    
+    eval $CMD
     
     EXIT_CODE=$?
     
@@ -93,5 +124,6 @@ else
     echo "✗ Xvfb 시작 실패"
     exit 1
 fi
+
 
 

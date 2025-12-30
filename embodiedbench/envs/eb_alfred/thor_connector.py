@@ -21,8 +21,9 @@ class ThorConnector(ThorEnv):
                  player_screen_height=constants.DETECTION_SCREEN_HEIGHT,
                  player_screen_width=constants.DETECTION_SCREEN_WIDTH,
                  quality='MediumCloseFitShadows',
-                 build_path=constants.BUILD_PATH):
-        super().__init__(x_display, player_screen_height, player_screen_width, quality, build_path)
+                 build_path=constants.BUILD_PATH,
+                 headless=False):  # Use headless=False with startx.py for headless mode (see README)
+        super().__init__(x_display, player_screen_height, player_screen_width, quality, build_path, headless=headless)
         self.font = ImageFont.truetype("/usr/share/fonts/truetype/ubuntu/UbuntuMono-B.ttf", 24)
         self.agent_height = 0.9
         self.cur_receptacle = None

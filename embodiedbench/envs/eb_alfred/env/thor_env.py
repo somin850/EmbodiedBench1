@@ -25,10 +25,104 @@ class ThorEnv(Controller):
                  player_screen_height=constants.DETECTION_SCREEN_HEIGHT,
                  player_screen_width=constants.DETECTION_SCREEN_WIDTH,
                  quality='MediumCloseFitShadows',
-                 build_path=constants.BUILD_PATH):
+                 build_path=constants.BUILD_PATH,
+                 headless=False):
         self.task = None
-
-        super().__init__(quality=quality)
+        
+        import os
+        import subprocess
+        import sys
+        from pathlib import Path
+        
+        # Auto-start X server with NVIDIA GPU (like manipulation environment)
+        # Check if AUTO_STARTX is enabled (default: True for headless operation)
+        auto_startx = os.environ.get('AUTO_STARTX', 'True').lower() in ('true', '1', 'yes')
+        
+        if auto_startx:
+            # Check for NVIDIA GPU
+            has_nvidia = False
+            try:
+                result = subprocess.run(['nvidia-smi'], 
+                                      stdout=subprocess.DEVNULL, 
+                                      stderr=subprocess.DEVNULL, 
+                                      timeout=2)
+                has_nvidia = (result.returncode == 0)
+            except:
+                pass
+            
+            if has_nvidia:
+                # Try to use display :1 (default for headless)
+                target_display = ':1'
+                display_num = 1
+                
+                # Check if X server is already running on :1
+                x_server_running = False
+                try:
+                    result = subprocess.run(['xdpyinfo', '-display', target_display], 
+                                          stdout=subprocess.DEVNULL, 
+                                          stderr=subprocess.DEVNULL, 
+                                          timeout=1)
+                    x_server_running = (result.returncode == 0)
+                except:
+                    # xdpyinfo not available, check lock file
+                    if os.path.exists(f'/tmp/.X{display_num}-lock'):
+                        x_server_running = True
+                
+                if not x_server_running:
+                    # Start X server using startx.py
+                    # thor_env.py is in env/, startx.py is in scripts/
+                    startx_script = Path(__file__).parent.parent / 'scripts' / 'startx.py'
+                    if startx_script.exists():
+                        print(f"[ThorEnv] Starting headless X server on {target_display} using startx.py...")
+                        try:
+                            # Start X server in background
+                            process = subprocess.Popen(
+                                [sys.executable, str(startx_script), str(display_num)],
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                start_new_session=True
+                            )
+                            # Wait a bit for X server to start
+                            time.sleep(2)
+                            # Check if process is still running (X server started successfully)
+                            if process.poll() is None:
+                                print(f"[ThorEnv] Headless X server started successfully on {target_display}")
+                                os.environ['DISPLAY'] = target_display
+                                x_display = target_display
+                            else:
+                                print(f"[ThorEnv] Warning: startx.py exited, X server may not be running")
+                        except Exception as e:
+                            print(f"[ThorEnv] Warning: Failed to start X server: {e}")
+                    else:
+                        print(f"[ThorEnv] Warning: startx.py not found at {startx_script}")
+                else:
+                    # X server already running
+                    print(f"[ThorEnv] Using existing X server on {target_display}")
+                    os.environ['DISPLAY'] = target_display
+                    x_display = target_display
+            else:
+                # No NVIDIA GPU, use Xvfb if available
+                current_display = os.environ.get('DISPLAY', '')
+                if current_display == ':1':
+                    x_display = ':1'
+                    os.environ['DISPLAY'] = ':1'
+                    print(f"[ThorEnv] Using Xvfb virtual display :1 (no NVIDIA GPU)")
+                elif os.path.exists('/tmp/.X1-lock'):
+                    os.environ['DISPLAY'] = ':1'
+                    x_display = ':1'
+                    print(f"[ThorEnv] Using Xvfb virtual display :1 (detected from lock file)")
+        else:
+            # Manual mode: use DISPLAY environment variable or default
+            current_display = os.environ.get('DISPLAY', '')
+            if current_display == ':1':
+                x_display = ':1'
+                os.environ['DISPLAY'] = ':1'
+                print(f"[ThorEnv] Using virtual display :1 (DISPLAY={current_display})")
+            elif current_display != ':0' and current_display.startswith(':'):
+                x_display = current_display
+                print(f"[ThorEnv] Using virtual display {current_display}")
+        
+        super().__init__(quality=quality, headless=headless)
         self.local_executable_path = build_path
         self.start(x_display=x_display,
                    player_screen_height=player_screen_height,
@@ -57,42 +151,15 @@ class ThorEnv(Controller):
         '''
         reset scene and task states
         '''
-        print("Resetting ThorEnv")
-
         if type(scene_name_or_num) == str:
             scene_name = scene_name_or_num
         else:
             scene_name = 'FloorPlan%d' % scene_name_or_num
-        # 첫 번째 reset 호출 및 결과 확인
-        first_event = super().reset(scene_name)
-        # 시뮬레이터가 준비되었는지 확인
-        max_wait_time = 10  # 최대 대기 시간 (초)
-        wait_interval = 0.5  # 확인 간격 (초)
-        waited_time = 0
-        while waited_time < max_wait_time:
-            if (first_event is not None and 
-                hasattr(first_event, 'metadata') and 
-                first_event.metadata.get('lastActionSuccess', False)):
-                break
-            time.sleep(wait_interval)
-            waited_time += wait_interval
-            # last_event도 확인
-            if (hasattr(self, 'last_event') and 
-                self.last_event is not None and 
-                hasattr(self.last_event, 'metadata') and 
-                self.last_event.metadata.get('lastActionSuccess', False)):
-                break
-        event = super().step(dict(
-            action='Initialize',
-            gridSize=grid_size,
-            cameraY=camera_y,
-            renderImage=render_image,
-            renderDepthImage=render_depth_image,
-            renderClassImage=render_class_image,
-            renderObjectImage=render_object_image,
-            visibility_distance=visibility_distance,
-            makeAgentsVisible=False,
-        ))
+        
+        # Call parent reset - ai2thor Controller.reset only accepts scene_name
+        # The initialization parameters are already set in __init__, so we just need to reset the scene
+        # Note: controller.py's reset() will call Initialize (changed to Pass) to avoid blocking
+        event = super().reset(scene_name)
 
         # reset task if specified
         if self.task is not None:
@@ -115,17 +182,9 @@ class ThorEnv(Controller):
         '''
         restore object locations and states
         '''
-        super().step(dict(
-            action='Initialize',
-            gridSize=constants.AGENT_STEP_SIZE / constants.RECORD_SMOOTHING_FACTOR,
-            cameraY=constants.CAMERA_HEIGHT_OFFSET,
-            renderImage=constants.RENDER_IMAGE,
-            renderDepthImage=constants.RENDER_DEPTH_IMAGE,
-            renderClassImage=constants.RENDER_CLASS_IMAGE,
-            renderObjectImage=constants.RENDER_OBJECT_IMAGE,
-            visibility_distance=constants.VISIBILITY_DISTANCE,
-            makeAgentsVisible=False,
-        ))
+        # NOTE: Initialize is already called in reset(), so skip it here to avoid blocking
+        # The Initialize parameters are not needed as they were set during reset()
+        # Just proceed to restore object states
         if len(object_toggles) > 0:
             super().step((dict(action='SetObjectToggles', objectToggles=object_toggles)))
 

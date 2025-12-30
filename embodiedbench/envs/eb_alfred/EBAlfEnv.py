@@ -94,14 +94,20 @@ class EBAlfEnv(gym.Env):
         action_space (gym.spaces.Discrete): Discrete action space 
         language_skill_set (list): Readable action descriptions
     """
-    def __init__(self, eval_set='base', exp_name='', down_sample_ratio=1.0, selected_indexes=[], detection_box=False, resolution=500):
+    def __init__(self, eval_set='base', exp_name='', down_sample_ratio=1.0, selected_indexes=[], detection_box=False, resolution=500, tasks_per_task_type=None, task_selection_seed=42):
         """
         Initialize the AI2THOR environment.
+        
+        Args:
+            tasks_per_task_type: 각 task_type당 선택할 task 개수 (None이면 전체 사용)
+            task_selection_seed: task 선택 시 사용할 시드
         """
         super().__init__()
         self.data_path = ALFRED_SPLIT_PATH
         self.reward_config_path = ALFRED_REWARD_PATH
         self.resolution = resolution
+        # ThorEnv will automatically handle headless X server setup (NVIDIA GPU with startx.py or Xvfb)
+        # Just pass the default X_DISPLAY, and ThorEnv will override if needed
         self.env = ThorConnector(x_display=X_DISPLAY, player_screen_height=resolution, player_screen_width=resolution)
 
         # load dataset
@@ -110,6 +116,17 @@ class EBAlfEnv(gym.Env):
         self.dataset = self._load_dataset(eval_set)
         if len(selected_indexes):
             self.dataset = [self.dataset[i] for i in selected_indexes]
+        elif tasks_per_task_type is not None:
+            # Task type별로 tasks_per_task_type개씩 선택
+            from embodiedbench.evaluator.task_selector_re import select_tasks_per_task_type_alfred
+            selected_indexes, task_type_mapping = select_tasks_per_task_type_alfred(
+                self.dataset,
+                data_path=None,  # data_path는 사용하지 않음
+                tasks_per_task_type=tasks_per_task_type,
+                seed=task_selection_seed
+            )
+            self.dataset = [self.dataset[i] for i in selected_indexes]
+            logger.info(f"[EBAlfEnv] Selected {len(selected_indexes)} tasks per task_type (max {tasks_per_task_type}): {task_type_mapping}")
         
         # Episode tracking
         self.number_of_episodes = len(self.dataset)

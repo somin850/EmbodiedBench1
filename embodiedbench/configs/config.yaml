@@ -18,3 +18,7 @@ exp_name: null
 visual_icl: null
 tp: null
 log_level: null
+tasks_per_variation: null
+task_selection_seed: null
+memory_mode: null
+previous_results_dir: null

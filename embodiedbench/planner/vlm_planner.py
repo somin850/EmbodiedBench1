@@ -34,6 +34,13 @@ class VLMPlanner():
         self.language_only = language_only
         self.kwargs = kwargs
         self.action_key = kwargs.pop('action_key', 'action_id')
+        
+        # 동적 메모리 추가 (ALFRED용 - eval_set별로)
+        self.dynamic_success_examples = {}  # {eval_set: [예제1, 예제2, ...]}
+        self.dynamic_failure_examples = {}  # {eval_set: [예제1, 예제2, ...]}
+        
+        # 프롬프트 저장용
+        self.last_prompt = None
     
     def set_actions(self, actions):
         self.actions = actions
@@ -46,13 +53,44 @@ class VLMPlanner():
             if i < len(available_actions) - 1:
                 available_action_str += ', '
         return available_action_str
+    
+    def add_dynamic_memory(self, eval_set, success_examples, failure_examples):
+        """특정 eval_set에 동적 메모리 추가"""
+        self.dynamic_success_examples[eval_set] = success_examples
+        self.dynamic_failure_examples[eval_set] = failure_examples
+    
+    def get_examples_for_eval_set(self, eval_set):
+        """
+        기본 예제 + 동적 예제 합쳐서 반환
+        순서: 기본 예제 -> 성공 예제 -> 실패 예제
+        """
+        # ALFRED의 examples는 list 형태
+        base_examples = self.examples if isinstance(self.examples, list) else []
+        success_examples = self.dynamic_success_examples.get(eval_set, [])
+        failure_examples = self.dynamic_failure_examples.get(eval_set, [])
+        
+        # 기본 예제 먼저, 그 다음 성공 예제, 마지막 실패 예제
+        return base_examples + success_examples + failure_examples
 
 
-    def process_prompt(self, user_instruction, prev_act_feedback=[]):
+    def process_prompt(self, user_instruction, prev_act_feedback=[], eval_set=None):
         user_instruction = user_instruction.rstrip('.')
+        # 동적 메모리 포함하여 모든 예제 가져오기 (eval_set이 제공된 경우)
+        if eval_set is not None:
+            all_examples = self.get_examples_for_eval_set(eval_set)
+            # 디버깅: 메모리가 포함되었는지 확인
+            base_count = len(self.examples) if isinstance(self.examples, list) else 0
+            success_count = len(self.dynamic_success_examples.get(eval_set, []))
+            failure_count = len(self.dynamic_failure_examples.get(eval_set, []))
+            if success_count > 0 or failure_count > 0:
+                logger.info(f"[VLMPlanner] eval_set={eval_set}: base={base_count}, success={success_count}, failure={failure_count}, total={len(all_examples)}")
+        else:
+            all_examples = self.examples if isinstance(self.examples, list) else []
+        
         if len(prev_act_feedback) == 0:
             if self.n_shot >= 1:
-                prompt = self.system_prompt.format(len(self.actions)-1, self.available_action_str, '\n\n'.join([f'## Task Execution Example {i}: \n {x}' for i,x in enumerate(self.examples[:self.n_shot])])) 
+                # n_shot만큼만 사용하되, 동적 메모리가 포함된 all_examples 사용
+                prompt = self.system_prompt.format(len(self.actions)-1, self.available_action_str, '\n\n'.join([f'## Task Execution Example {i}: \n {x}' for i,x in enumerate(all_examples[:self.n_shot])])) 
             else:
                 prompt = self.system_prompt.format(len(self.actions)-1, self.available_action_str, '')
 
@@ -77,7 +115,7 @@ class VLMPlanner():
                 prompt += f'''\n\n Considering the above interaction history and the current image state, to achieve the human instruction: '{user_instruction}', you are supposed to output in json. You need to describe current visual state from the image, summarize interaction history {'and environment feedback ' if self.use_feedback else ''}and reason why the last action or plan failed and did not finish the task, output your new plan to achieve the goal from current state. At the end, output the excutable plan with action ids(0 ~ {len(self.actions)-1}) from the available actions.'''
         else:
             if self.n_shot >= 1:
-                prompt = self.system_prompt.format(len(self.actions)-1, self.available_action_str, '\n\n'.join([f'## Task Execution Example  {i}: \n {x}' for i,x in enumerate(self.examples[:self.n_shot])])) 
+                prompt = self.system_prompt.format(len(self.actions)-1, self.available_action_str, '\n\n'.join([f'## Task Execution Example  {i}: \n {x}' for i,x in enumerate(all_examples[:self.n_shot])])) 
             else:
                 prompt = self.system_prompt.format(len(self.actions)-1, self.available_action_str, '')
             prompt += f'\n\n## Now the human instruction is: {user_instruction}.'
@@ -191,13 +229,16 @@ class VLMPlanner():
         return action, out
 
 
-    def act(self, observation, user_instruction):
+    def act(self, observation, user_instruction, eval_set=None, task_type=None):
         if type(observation) == dict:
             obs = observation[self.obs_key]
         else:
             obs = observation # input image path
         
-        prompt = self.process_prompt(user_instruction, prev_act_feedback=self.episode_act_feedback)
+        # task_type이 제공된 경우 eval_set과 task_type 조합으로 메모리 키 생성
+        memory_key = f"{eval_set}_{task_type}" if (eval_set is not None and task_type is not None) else eval_set
+        prompt = self.process_prompt(user_instruction, prev_act_feedback=self.episode_act_feedback, eval_set=memory_key)
+        self.last_prompt = prompt  # 프롬프트 저장
         # some models do not support json scheme, add style into prompt
         if 'claude' in self.model_name or 'InternVL' in self.model_name or 'Qwen2-VL' in self.model_name or 'Qwen2.5-VL' in self.model_name or self.model_type == 'custom':
             prompt = prompt + template_lang if self.language_only else prompt + template

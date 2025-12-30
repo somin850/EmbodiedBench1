@@ -24,6 +24,12 @@ from copy import deepcopy
 from pyrep.backend import sim
 from scipy.spatial.transform import Rotation as R
 
+import sys
+import os
+# tools 모듈 경로 추가
+_manipulation_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _manipulation_dir not in sys.path:
+    sys.path.insert(0, _manipulation_dir)
 from tools.grasploc import Grasploc, define_default_args
 
 def ClipFloatValues(float_array, min_value, max_value):

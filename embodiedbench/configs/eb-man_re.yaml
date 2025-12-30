@@ -1,0 +1,19 @@
+# configs/EB-Manipulation_re.yaml
+model_name: gpt-4o-mini
+model_type: remote
+down_sample_ratio: 1
+language_only: 0
+eval_sets: []
+chat_history: 0
+n_shots: 4
+multiview: 0
+detection_box: 1
+multistep: 0
+resolution: 500
+exp_name: baseline_re
+visual_icl: 0
+tp: 1
+tasks_per_variation: null  # 각 task variation당 개수 (null이면 전체 사용)
+task_selection_seed: 42  # Task 선택 시 랜덤 시드 (같은 seed면 같은 task 선택)
+memory_mode: baseline  # baseline, failure_only, success_and_failure, success_only
+previous_results_dir: null  # 이전 실행 결과 디렉토리 경로
