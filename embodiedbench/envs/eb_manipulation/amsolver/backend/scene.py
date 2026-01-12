@@ -2,7 +2,6 @@
 from typing import List, Callable
 
 import numpy as np
-from numpy.lib.function_base import place
 from pyrep import PyRep
 from pyrep.const import ObjectType
 from pyrep.errors import ConfigurationPathError

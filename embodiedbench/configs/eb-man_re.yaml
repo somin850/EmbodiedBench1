@@ -1,5 +1,5 @@
 # configs/EB-Manipulation_re.yaml
-model_name: gpt-4o-mini
+model_name: gpt-4.1
 model_type: remote
 down_sample_ratio: 1
 language_only: 0
@@ -10,7 +10,7 @@ multiview: 0
 detection_box: 1
 multistep: 0
 resolution: 500
-exp_name: baseline_re
+exp_name: 4_re
 visual_icl: 0
 tp: 1
 tasks_per_variation: null  # 각 task variation당 개수 (null이면 전체 사용)

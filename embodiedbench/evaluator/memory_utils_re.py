@@ -243,7 +243,7 @@ def create_memory_example(episode_result, is_success, avg_obj_coord=None):
     if is_success:
         prefix = "=== SUCCESSFUL EXAMPLE ===\nThis is a successful example from a similar task type (though not identical to the current task). Follow this pattern to complete your task.\n\n"
     else:
-        prefix = "=== FAILED EXAMPLE ===\nThis is a FAILED example from a similar task type (though not identical to the current task). **IMPORTANT**: This example failed to complete the task. You must carefully analyze why it failed by examining the failure_analysis section below. Pay attention to:\n1. What actions were executed and why they failed\n2. What mistakes were made in the reasoning or plan\n3. How to avoid making the same mistakes in your current task\n\nWhen performing your task, be especially careful to avoid the errors shown in this failed example.\n\n"
+        prefix = "=== FAILED EXAMPLE ===\n**IMPORTANT**: This is a FAILED example from a similar task type to your current task (though not identical). This example failed to complete the task. You must:\n1. Carefully analyze the failure_analysis section below to understand why this similar task failed\n2. Identify the root causes of the failure (e.g., incorrect reasoning, wrong action sequence, positioning errors, gripper state issues)\n3. Learn from these mistakes and perform actions that avoid the same failures in your current task\n4. Use this failed example as a reference to understand what NOT to do, and adjust your plan accordingly\n\nPay close attention to the executed actions, their outcomes, and the failure analysis. When performing your current task, be especially careful to avoid making the same mistakes shown in this failed example.\n\n"
     
     return prefix + example
 

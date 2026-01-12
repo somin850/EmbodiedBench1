@@ -48,7 +48,10 @@ class RemoteModel:
                     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
                 )
             elif "gpt" in self.model_name:
-                self.model = OpenAI()
+                api_key = os.environ.get("OPENAI_API_KEY")
+                if not api_key:
+                    raise ValueError("OPENAI_API_KEY environment variable is not set")
+                self.model = OpenAI(api_key=api_key)
             elif 'qwen' in self.model_name:
                 self.model = OpenAI(
                     api_key=os.getenv("DASHSCOPE_API_KEY"),

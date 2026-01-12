@@ -166,8 +166,37 @@ class EB_ManipulationEvaluator():
         with open(os.path.join(res_path, filename), 'w', encoding='utf-8') as f:
             json.dump(task_log, f, ensure_ascii=False)
 
+    def get_completed_episodes(self):
+        """완료된 episode 번호 리스트 반환"""
+        completed = []
+        if self.env and self.env.log_path:
+            results_path = os.path.join(self.env.log_path, 'results')
+            if os.path.exists(results_path):
+                for filename in os.listdir(results_path):
+                    if filename.startswith('episode_') and '_res' in filename and filename.endswith('.json'):
+                        try:
+                            # episode_X_res{exp_suffix}.json 형식 파싱
+                            parts = filename.replace('.json', '').split('_res')
+                            episode_num = int(parts[0].split('_')[1])
+                            completed.append(episode_num)
+                        except:
+                            continue
+        return sorted(set(completed))
+    
     def evaluate(self):
-        progress_bar = tqdm(total=self.env.number_of_episodes, desc="Episodes")
+        # 완료된 episode 확인 및 스킵
+        completed_episodes = self.get_completed_episodes()
+        if completed_episodes:
+            max_completed = max(completed_episodes)
+            logger.info(f"[Resume] Found {len(completed_episodes)} completed episodes (up to episode {max_completed}). Skipping...")
+            # 완료된 episode 다음부터 시작
+            self.env._current_episode_num = max_completed + 1
+            if self.env._current_episode_num >= self.env.number_of_episodes:
+                logger.info(f"[Resume] All episodes already completed!")
+                self.print_task_eval_results(filename="summary{}.json".format(self.exp_suffix))
+                return
+        
+        progress_bar = tqdm(total=self.env.number_of_episodes, desc="Episodes", initial=self.env._current_episode_num)
         while self.env._current_episode_num < self.env.number_of_episodes:
             logger.info(f"Evaluating episode {self.env._current_episode_num} ...")
             episode_info = {'reward': [], 'action_success': [], 'executed_actions': [], 'step_task_success': []}
@@ -287,7 +316,18 @@ class EB_ManipulationEvaluator():
                                                                                                     self.config['visual_icl'],
                                                                                                     self.eval_set)
             else:
-                self.log_path = 'running/eb_manipulation/{}/{}/{}'.format(real_model_name, self.config["exp_name"], self.eval_set)
+                # memory_mode에 따라 폴더명 생성: baseline4_re, failure4_re 등
+                memory_mode_mapping = {
+                    'baseline': 'baseline',
+                    'failure_only': 'failure',
+                    'success_and_failure': 'all',
+                    'success_only': 'success'
+                }
+                memory_prefix = memory_mode_mapping.get(self.memory_mode, self.memory_mode)
+                exp_name = self.config["exp_name"]
+                # exp_name이 "4_re" 형식이면 "baseline4_re" 형식으로 조합
+                folder_name = f"{memory_prefix}{exp_name}"
+                self.log_path = 'running/eb_manipulation/{}/{}/{}'.format(real_model_name, folder_name, self.eval_set)
             self.env = EBManEnv(eval_set=self.eval_set, img_size=(self.config['resolution'], self.config['resolution']), down_sample_ratio=self.config["down_sample_ratio"], log_path=self.log_path, tasks_per_variation=self.tasks_per_variation, task_selection_seed=self.task_selection_seed)
             ic_examples = self.load_demonstration()
             self.planner = ManipPlanner(model_name=self.model_name,
@@ -308,6 +348,9 @@ class EB_ManipulationEvaluator():
                     success_memory, failure_memory = self.load_dynamic_memory(variation)
                     if len(success_memory) > 0 or len(failure_memory) > 0:
                         self.planner.add_dynamic_memory(variation, success_memory, failure_memory)
+                        logger.info(f"[Memory] Loaded {len(success_memory)} success + {len(failure_memory)} failure examples for {variation} (mode: {self.memory_mode})")
+                    else:
+                        logger.info(f"[Memory] No dynamic memory found for {variation} (mode: {self.memory_mode})")
             
             self.evaluate()
             with open(os.path.join(self.log_path, 'config.txt'), 'w') as f:
