@@ -70,23 +70,26 @@ class ManipPlanner():
     
     def process_prompt(self, user_instruction, avg_obj_coord, task_variation, prev_act_feedback=[]):
         user_instruction = user_instruction.rstrip('.')
-        # 동적 메모리 포함하여 모든 예제 가져오기
-        all_examples = self.get_examples_for_variation(task_variation)
         
         # 기본 예제는 원래 코드대로 사용
         base_examples = self.examples.get(task_variation, [])[:self.n_shot]
         
-        # 동적 메모리 추가 (기본 예제에 추가)
-        success_examples = self.dynamic_success_examples.get(task_variation, [])
-        failure_examples = self.dynamic_failure_examples.get(task_variation, [])
-        selected_success = success_examples[:3]  # 성공 최대 3개
-        selected_failure = failure_examples[:3]  # 실패 최대 3개
-        
-        # 기본 예제 + 동적 메모리 (성공 + 실패)
-        selected_examples = base_examples + selected_success + selected_failure
-        
-        if len(selected_success) > 0 or len(selected_failure) > 0:
-            logger.info(f"[ManipPlanner] Using {len(base_examples)} base + {len(selected_success)} success + {len(selected_failure)} failure = {len(selected_examples)} total examples for {task_variation}")
+        # 첫 번째 step에서만 동적 메모리 추가
+        if len(prev_act_feedback) == 0:
+            # 동적 메모리 추가 (기본 예제에 추가)
+            success_examples = self.dynamic_success_examples.get(task_variation, [])
+            failure_examples = self.dynamic_failure_examples.get(task_variation, [])
+            selected_success = success_examples[:3]  # 성공 최대 3개
+            selected_failure = failure_examples[:3]  # 실패 최대 3개
+            
+            # 기본 예제 + 동적 메모리 (성공 + 실패)
+            selected_examples = base_examples + selected_success + selected_failure
+            
+            if len(selected_success) > 0 or len(selected_failure) > 0:
+                logger.info(f"[ManipPlanner] First step: Using {len(base_examples)} base + {len(selected_success)} success + {len(selected_failure)} failure = {len(selected_examples)} total examples for {task_variation}")
+        else:
+            # 재계획 step에서는 기본 예제만 사용 (원래 코드와 동일)
+            selected_examples = base_examples
         
         if len(prev_act_feedback) == 0:
             if self.n_shot >= 1:

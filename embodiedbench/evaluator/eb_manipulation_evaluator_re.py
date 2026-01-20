@@ -51,22 +51,31 @@ class EB_ManipulationEvaluator():
 
         return all_examples
 
-    def load_dynamic_memory(self, task_variation):
-        """이전 실행 결과에서 동적 메모리 로드"""
+    def load_dynamic_memory(self, task_variation, current_episode_num=None):
+        """이전 실행 결과에서 동적 메모리 로드 (memory_mode에 따라 반환)
+        
+        Args:
+            task_variation: 현재 task variation
+            current_episode_num: 현재 실행 중인 episode 번호 (자기 자신 제외를 위해)
+        """
         if self.previous_results_dir is None or self.memory_mode == 'baseline':
             return [], []
         
         from embodiedbench.evaluator.memory_utils_re import load_memory_from_results
         
         # dataset_info는 사용하지 않음 (episode_results에서 직접 task_variation 읽음)
+        # current_episode_num을 전달하여 자기 자신을 제외
+        # 유사도 계산 없이 순서대로 선택 (성공/실패 모두 로드)
         memory = load_memory_from_results(
             self.previous_results_dir, 
             task_variation,
             dataset_info=None,  # episode_results에서 직접 task_variation 읽음
+            current_episode_num=current_episode_num,  # 자기 자신 제외를 위해
             max_success=3,
             max_failure=3
         )
         
+        # memory_mode에 따라 반환 (실험 시에는 failure_only로 실행하여 실패 메모리만 사용)
         if self.memory_mode == 'failure_only':
             return [], memory['failure_examples']
         elif self.memory_mode == 'success_and_failure':
@@ -220,6 +229,18 @@ class EB_ManipulationEvaluator():
                 image_history.append(img_path_list[0])
             user_instruction = self.env.episode_language_instruction
             print(f"Instruction: {user_instruction}")
+            
+            # 각 episode마다 동적 메모리 로드 (순서대로 선택, memory_mode에 따라 사용)
+            if self.memory_mode != 'baseline':
+                current_variation = self.env.current_task_variation
+                success_memory, failure_memory = self.load_dynamic_memory(
+                    current_variation,
+                    current_episode_num=self.env._current_episode_num
+                )
+                if len(success_memory) > 0 or len(failure_memory) > 0:
+                    self.planner.add_dynamic_memory(current_variation, success_memory, failure_memory)
+                    logger.info(f"[Memory] Loaded {len(success_memory)} success + {len(failure_memory)} failure examples for {current_variation} (mode: {self.memory_mode})")
+            
             self.planner.reset()
             done = False
             reasoning_list = []
@@ -342,15 +363,7 @@ class EB_ManipulationEvaluator():
                                         visual_icl=self.config["visual_icl"],
                                         tp=self.config["tp"])
             
-            # 동적 메모리 추가 (각 task variation별로)
-            if self.memory_mode != 'baseline':
-                for variation in EVAL_SETS[self.eval_set]:
-                    success_memory, failure_memory = self.load_dynamic_memory(variation)
-                    if len(success_memory) > 0 or len(failure_memory) > 0:
-                        self.planner.add_dynamic_memory(variation, success_memory, failure_memory)
-                        logger.info(f"[Memory] Loaded {len(success_memory)} success + {len(failure_memory)} failure examples for {variation} (mode: {self.memory_mode})")
-                    else:
-                        logger.info(f"[Memory] No dynamic memory found for {variation} (mode: {self.memory_mode})")
+            # 동적 메모리는 evaluate() 함수 내에서 각 episode마다 로드 (instruction 기반 유사도 계산을 위해)
             
             self.evaluate()
             with open(os.path.join(self.log_path, 'config.txt'), 'w') as f:

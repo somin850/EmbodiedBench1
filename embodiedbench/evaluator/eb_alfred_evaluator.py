@@ -112,8 +112,14 @@ class EB_AlfredEvaluator():
         with open(os.path.join(res_path, filename), 'w', encoding='utf-8') as f:
             json.dump(memory_info, f, ensure_ascii=False, indent=2)
     
-    def load_dynamic_memory(self, eval_set, task_type=None):
-        """이전 실행 결과에서 동적 메모리 로드 (base eval_set은 제외, task_type별로 카테고리화)"""
+    def load_dynamic_memory(self, eval_set, task_type=None, current_episode_num=None):
+        """이전 실행 결과에서 동적 메모리 로드 (base eval_set은 제외, task_type별로 카테고리화)
+        
+        Args:
+            eval_set: 현재 eval_set
+            task_type: 현재 task_type (카테고리별 메모리 로드를 위해)
+            current_episode_num: 현재 실행 중인 episode 번호 (자기 자신 제외를 위해)
+        """
         if self.previous_results_dir is None or self.memory_mode == 'baseline' or eval_set == 'base':
             return [], []
         
@@ -123,6 +129,7 @@ class EB_AlfredEvaluator():
             self.previous_results_dir, 
             eval_set,
             task_type=task_type,  # task_type별로 필터링
+            current_episode_num=current_episode_num,  # 자기 자신 제외를 위해
             max_success=3,
             max_failure=3
         )
@@ -183,7 +190,12 @@ class EB_AlfredEvaluator():
                              'pick_and_place_with_movable_recep']
                 
                 for task_type in task_types:
-                    success_memory, failure_memory = self.load_dynamic_memory(self.eval_set, task_type)
+                    # 현재 episode_num을 전달하여 자기 자신을 제외
+                    success_memory, failure_memory = self.load_dynamic_memory(
+                        self.eval_set, 
+                        task_type,
+                        current_episode_num=self.env._current_episode_num
+                    )
                     if len(success_memory) > 0 or len(failure_memory) > 0:
                         # task_type을 key로 사용 (eval_set과 task_type 조합)
                         memory_key = f"{self.eval_set}_{task_type}"

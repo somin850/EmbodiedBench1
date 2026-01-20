@@ -20,13 +20,14 @@ def setup_environment():
     os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = coppeliasim_root
     os.environ['QT_QPA_PLATFORM'] = 'xcb'
     
-    # OpenAI API 키 확인 (없으면 기본값 사용)
-    if 'OPENAI_API_KEY' not in os.environ or not os.environ.get('OPENAI_API_KEY'):
-        # 기본 API 키 설정 (필요시 수정)
-        os.environ['OPENAI_API_KEY'] = default_key
-        print(f"✓ OPENAI_API_KEY set (length: {len(default_key)})")
+    # OpenAI API 키 설정 (항상 업데이트)
+    # 여기에 추가 
+    old_key = os.environ.get('OPENAI_API_KEY', '')
+    os.environ['OPENAI_API_KEY'] = default_key
+    if old_key:
+        print(f"✓ OPENAI_API_KEY updated (old length: {len(old_key)}, new length: {len(default_key)})")
     else:
-        print(f"✓ OPENAI_API_KEY already set (length: {len(os.environ.get('OPENAI_API_KEY', ''))})")
+        print(f"✓ OPENAI_API_KEY set (length: {len(default_key)})")
     
     # 기존 Xvfb 프로세스 종료
     subprocess.run(['pkill', '-f', 'Xvfb :1'], stderr=subprocess.DEVNULL)
@@ -52,16 +53,17 @@ def setup_environment():
 def run_baseline():
     """기본 실행"""
     print("=" * 50)
-    print("Step 1: Running baseline (5 tasks per variation)")
+    print("Step 1: Running baseline (6 tasks per variation)")
     print("=" * 50)
     cmd = [
         "python", "-m", "embodiedbench.main",
         "env=eb-man",
         "model_name=gpt-4.1",
-        "exp_name=4_re",
-        "tasks_per_variation=5",
+        "exp_name=version2",
+        "tasks_per_variation=6",
         "task_selection_seed=42",
-        "memory_mode=baseline"
+        "memory_mode=baseline",
+        "eval_sets=[base]"
     ]
     subprocess.run(cmd, env=os.environ.copy())
     print("\nBaseline completed!\n")
@@ -69,16 +71,17 @@ def run_baseline():
 def run_with_failure_memory(baseline_results_dir):
     """실패한 task만 메모리에 추가"""
     print("=" * 50)
-    print("Step 2: Running with failure memory only (5 tasks per variation)")
+    print("Step 2: Running with failure memory only (6 tasks per variation)")
     print("=" * 50)
     cmd = [
         "python", "-m", "embodiedbench.main",
         "env=eb-man",
         "model_name=gpt-4.1",
-        "exp_name=4_re",
-        "tasks_per_variation=5",
+        "exp_name=version2",
+        "tasks_per_variation=6",
         "task_selection_seed=42",
         "memory_mode=failure_only",
+        "eval_sets=[base]",
         f"previous_results_dir={baseline_results_dir}"
     ]
     subprocess.run(cmd, env=os.environ.copy())
@@ -87,16 +90,17 @@ def run_with_failure_memory(baseline_results_dir):
 def run_with_all_memory(baseline_results_dir):
     """성공/실패 모두 메모리에 추가"""
     print("=" * 50)
-    print("Step 3: Running with success and failure memory (5 tasks per variation)")
+    print("Step 3: Running with success and failure memory (6 tasks per variation)")
     print("=" * 50)
     cmd = [
         "python", "-m", "embodiedbench.main",
         "env=eb-man",
         "model_name=gpt-4.1",
-        "exp_name=4_re",
-        "tasks_per_variation=5",
+        "exp_name=version3",
+        "tasks_per_variation=6",
         "task_selection_seed=42",
         "memory_mode=success_and_failure",
+        "eval_sets=[base]",
         f"previous_results_dir={baseline_results_dir}"
     ]
     subprocess.run(cmd, env=os.environ.copy())
@@ -131,7 +135,7 @@ if __name__ == "__main__":
         if len(sys.argv) > 1:
             # 커맨드라인 인자로 특정 단계만 실행
             step = sys.argv[1]
-            baseline_results_dir = sys.argv[2] if len(sys.argv) > 2 else "running/eb_manipulation/gpt-4.1/baseline4_re/base/results"
+            baseline_results_dir = sys.argv[2] if len(sys.argv) > 2 else "running/eb_manipulation/gpt-4.1/baselineversion2/base/results"
             
             if step == "1":
                 run_baseline()
@@ -144,19 +148,13 @@ if __name__ == "__main__":
             else:
                 print("Usage: python memory_experiment_re.py [1|2|3|4] [baseline_results_dir]")
         else:
-            # 전체 실행
+            # 전체 실행 (baseline + failure_only만)
             # 1. 기본 실행
             run_baseline()
-            baseline_results_dir = "running/eb_manipulation/gpt-4.1/baseline4_re/base/results"
+            baseline_results_dir = "running/eb_manipulation/gpt-4.1/baselineversion2/base/results"
             
             # 2. 실패한 task만 메모리에 추가
             run_with_failure_memory(baseline_results_dir)
-            
-            # 3. 성공/실패 모두 메모리에 추가
-            run_with_all_memory(baseline_results_dir)
-            
-            # 4. 성공한 task만 메모리에 추가
-            run_with_success_memory(baseline_results_dir)
             
             print("=" * 50)
             print("All experiments completed!")
